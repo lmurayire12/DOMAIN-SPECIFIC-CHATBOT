@@ -33,12 +33,15 @@ def generate_text(input_ids, attention_mask, model):
 
 def load_model():
     model_path = Path(MODEL_DIR)
+    model_file = model_path / "tf_model.h5"
+    tokenizer_file = model_path / "tokenizer_config.json"
     
-    if not model_path.exists():
+    # Check if both model weights and tokenizer exist
+    if not model_file.exists() or not tokenizer_file.exists():
         print("⚠ Fine-tuned model not found. Using base FLAN-T5-small.")
         print("💡 To use the fine-tuned model, run chatbot.ipynb first.")
         tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-        model = TFAutoModelForSeq2SEqLM.from_pretrained("google/flan-t5-small")
+        model = TFAutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small", from_pt=True)
         return tokenizer, model
     
     print("✓ Loading fine-tuned model from local directory")
