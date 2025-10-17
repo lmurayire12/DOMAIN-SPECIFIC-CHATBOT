@@ -264,18 +264,22 @@ def main():
     print("Initializing components...")
 
     tokenizer, model = load_model()
-    print("✓ Model loaded")
+    print(" Model loaded")
 
     df = load_data()
-    print(f"✓ Data loaded ({len(df)} transactions)")
+    print(f" Data loaded ({len(df)} transactions)")
 
     index, texts, metas, sbert = load_faiss()
-    print("✓ FAISS index loaded")
+    print(" FAISS index loaded")
 
     interface = create_interface(df, index, texts, metas, sbert, tokenizer, model)
     print("\nStarting BudgetBuddy...\n")
 
-    interface.launch(share=False)
+    interface.launch(
+        server_name="0.0.0.0",
+        server_port=int(os.environ.get("PORT", 7860)),
+        share=False
+    )
 
 
 if __name__ == "__main__":
