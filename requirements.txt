@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+xgboost
+joblib
+nltk
+tensorflow>=2.10
+transformers
+sacrebleu
+rouge_score
+gradio
