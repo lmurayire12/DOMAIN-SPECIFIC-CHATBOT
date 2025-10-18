@@ -13,3 +13,5 @@ sacrebleu
 rouge_score
 gradio
 dateparser
+fastapi
+uvicorn

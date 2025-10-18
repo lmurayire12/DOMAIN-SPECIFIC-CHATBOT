@@ -15,6 +15,8 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import gradio as gr
 import dateparser
+from fastapi import FastAPI
+import uvicorn
 
 
 DATA_URL = "https://raw.githubusercontent.com/lmurayire12/DOMAIN-SPECIFIC-CHATBOT/refs/heads/main/data/personal_transactions%20new.csv"
@@ -314,27 +316,29 @@ def create_interface():
 
 
 def main():
-    print("Initializing web server (lazy loading enabled)...", flush=True)
+    print("Initializing web server (FastAPI + Gradio mount, lazy loading enabled)...", flush=True)
 
     # Bind to Render-provided port immediately
     port = int(os.environ.get("PORT", 7860))
     print(f"🔧 Will bind to 0.0.0.0:{port}", flush=True)
 
+    # FastAPI app
+    api = FastAPI()
+
+    @api.get("/health")
+    def health():
+        return {"status": "ok", "ready": APP_READY}
+
     # Create UI without heavy deps; use globals inside chat()
-    interface = create_interface()
+    gradio_app = create_interface()
+    # Mount Gradio at root
+    app_mounted = gr.mount_gradio_app(api, gradio_app, path="/")
 
     # Start background initialization so the port opens quickly
     threading.Thread(target=init_all_heavy_components, daemon=True).start()
 
     print(f"\n🚀 Starting BudgetBuddy on port {port}...\n", flush=True)
-    interface.launch(
-        server_name="0.0.0.0",
-        server_port=port,
-        share=False,
-        show_error=True,
-        quiet=False,
-        prevent_thread_lock=False,
-    )
+    uvicorn.run(app_mounted, host="0.0.0.0", port=port, log_level="info")
     print(f"\n✅ BudgetBuddy is now running on http://0.0.0.0:{port}\n", flush=True)
 
 
