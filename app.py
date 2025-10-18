@@ -5,6 +5,10 @@ import pickle
 from pathlib import Path
 from datetime import datetime
 
+# Set matplotlib backend before importing to prevent font cache hanging
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
+
 import pandas as pd
 import numpy as np
 import tensorflow as tf
@@ -23,7 +27,7 @@ EMB_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 MAX_LENGTH = 256
 
 
-print("Loading BudgetBuddy chatbot...")
+print("Loading BudgetBuddy chatbot...", flush=True)
 
 
 @tf.function(reduce_retracing=True)
@@ -38,13 +42,13 @@ def load_model():
     
     # Check if both model weights and tokenizer exist
     if not model_file.exists() or not tokenizer_file.exists():
-        print("⚠ Fine-tuned model not found. Using base FLAN-T5-small.")
-        print("💡 To use the fine-tuned model, run chatbot.ipynb first.")
+        print("⚠ Fine-tuned model not found. Using base FLAN-T5-small.", flush=True)
+        print("💡 To use the fine-tuned model, run chatbot.ipynb first.", flush=True)
         tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
         model = TFAutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small", from_pt=True)
         return tokenizer, model
     
-    print("✓ Loading fine-tuned model from local directory")
+    print("✓ Loading fine-tuned model from local directory", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR))
     model = TFAutoModelForSeq2SeqLM.from_pretrained(str(MODEL_DIR))
     return tokenizer, model
@@ -68,10 +72,10 @@ def load_data():
 
 def load_faiss():
     if not Path(FAISS_INDEX_PATH).exists():
-        print("⚠ FAISS index not found. Building from CSV data...")
+        print("⚠ FAISS index not found. Building from CSV data...", flush=True)
         return build_faiss_from_data()
 
-    print("✓ Loading FAISS index from local directory")
+    print("✓ Loading FAISS index from local directory", flush=True)
     index = faiss.read_index(FAISS_INDEX_PATH)
     with open(FAISS_META_PATH, "rb") as f:
         meta = pickle.load(f)
@@ -81,7 +85,7 @@ def load_faiss():
 
 
 def build_faiss_from_data():
-    print("Building FAISS index from transaction data...")
+    print("Building FAISS index from transaction data...", flush=True)
     df = pd.read_csv(DATA_URL, encoding="utf-8")
     
     sbert = SentenceTransformer(EMB_MODEL)
@@ -109,7 +113,7 @@ def build_faiss_from_data():
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
     
-    print(f"✓ Built FAISS index with {len(texts)} transactions")
+    print(f"✓ Built FAISS index with {len(texts)} transactions", flush=True)
     return index, texts, metas, sbert
 
 
@@ -261,24 +265,24 @@ def create_interface(df, index, texts, metas, sbert, tokenizer, model):
 
 
 def main():
-    print("Initializing components...")
+    print("Initializing components...", flush=True)
     
     # Get port early
     port = int(os.environ.get("PORT", 7860))
-    print(f"🔧 Will bind to 0.0.0.0:{port}")
+    print(f"🔧 Will bind to 0.0.0.0:{port}", flush=True)
 
     tokenizer, model = load_model()
-    print("✓ Model loaded")
+    print("✓ Model loaded", flush=True)
 
     df = load_data()
-    print(f"✓ Data loaded ({len(df)} transactions)")
+    print(f"✓ Data loaded ({len(df)} transactions)", flush=True)
 
     index, texts, metas, sbert = load_faiss()
-    print("✓ FAISS index loaded")
+    print("✓ FAISS index loaded", flush=True)
 
     interface = create_interface(df, index, texts, metas, sbert, tokenizer, model)
     
-    print(f"\n🚀 Starting BudgetBuddy on port {port}...\n")
+    print(f"\n🚀 Starting BudgetBuddy on port {port}...\n", flush=True)
 
     interface.launch(
         server_name="0.0.0.0",
@@ -288,7 +292,7 @@ def main():
         quiet=False
     )
     
-    print(f"\n✅ BudgetBuddy is now running on http://0.0.0.0:{port}\n")
+    print(f"\n✅ BudgetBuddy is now running on http://0.0.0.0:{port}\n", flush=True)
 
 
 if __name__ == "__main__":
