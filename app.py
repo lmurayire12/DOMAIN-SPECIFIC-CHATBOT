@@ -4,6 +4,8 @@ import json
 import pickle
 from pathlib import Path
 from datetime import datetime
+import threading
+import time
 
 import pandas as pd
 import numpy as np
@@ -111,6 +113,44 @@ def build_faiss_from_data():
     
     print(f"✓ Built FAISS index with {len(texts)} transactions", flush=True)
     return index, texts, metas, sbert
+
+
+# -----------------------------
+# Lazy initialization globals
+# -----------------------------
+tokenizer_global = None
+model_global = None
+df_global = None
+index_global = None
+texts_global = None
+metas_global = None
+sbert_global = None
+APP_READY = False
+
+
+def init_all_heavy_components():
+    """Load models, data, and FAISS in the background to avoid startup timeouts."""
+    global tokenizer_global, model_global, df_global
+    global index_global, texts_global, metas_global, sbert_global, APP_READY
+
+    try:
+        print("[init] Loading model...", flush=True)
+        tokenizer_global, model_global = load_model()
+        print("[init] Model loaded", flush=True)
+
+        print("[init] Loading data...", flush=True)
+        df_global = load_data()
+        print(f"[init] Data loaded ({len(df_global)} transactions)", flush=True)
+
+        print("[init] Loading/Building FAISS...", flush=True)
+        index_global, texts_global, metas_global, sbert_global = load_faiss()
+        print("[init] FAISS ready", flush=True)
+
+        APP_READY = True
+        print("[init] App is READY ✅", flush=True)
+    except Exception as e:
+        # Do not crash the server; keep running so port stays open
+        print(f"[init] Initialization error: {e}", flush=True)
 
 
 def is_finance_related(question):
@@ -223,13 +263,26 @@ def answer_question(question, df, index, texts, metas, sbert, tokenizer, model):
         return generate_answer(question, context, tokenizer, model)
 
 
-def create_interface(df, index, texts, metas, sbert, tokenizer, model):
+def create_interface():
     def chat(question):
         if not question.strip():
             return "Please ask a question about your finances."
 
         try:
-            answer = answer_question(question, df, index, texts, metas, sbert, tokenizer, model)
+            # Use lazy-loaded globals
+            if not APP_READY:
+                return "🔄 The app is starting up and loading models (~30-60s on first run). Please try again shortly."
+
+            answer = answer_question(
+                question,
+                df_global,
+                index_global,
+                texts_global,
+                metas_global,
+                sbert_global,
+                tokenizer_global,
+                model_global,
+            )
             return answer
         except Exception as e:
             return f"Error processing your question. Please try rephrasing it."
@@ -261,33 +314,27 @@ def create_interface(df, index, texts, metas, sbert, tokenizer, model):
 
 
 def main():
-    print("Initializing components...", flush=True)
-    
-    # Get port early
+    print("Initializing web server (lazy loading enabled)...", flush=True)
+
+    # Bind to Render-provided port immediately
     port = int(os.environ.get("PORT", 7860))
     print(f"🔧 Will bind to 0.0.0.0:{port}", flush=True)
 
-    tokenizer, model = load_model()
-    print("✓ Model loaded", flush=True)
+    # Create UI without heavy deps; use globals inside chat()
+    interface = create_interface()
 
-    df = load_data()
-    print(f"✓ Data loaded ({len(df)} transactions)", flush=True)
+    # Start background initialization so the port opens quickly
+    threading.Thread(target=init_all_heavy_components, daemon=True).start()
 
-    index, texts, metas, sbert = load_faiss()
-    print("✓ FAISS index loaded", flush=True)
-
-    interface = create_interface(df, index, texts, metas, sbert, tokenizer, model)
-    
     print(f"\n🚀 Starting BudgetBuddy on port {port}...\n", flush=True)
-
     interface.launch(
         server_name="0.0.0.0",
         server_port=port,
         share=False,
         show_error=True,
-        quiet=False
+        quiet=False,
+        prevent_thread_lock=False,
     )
-    
     print(f"\n✅ BudgetBuddy is now running on http://0.0.0.0:{port}\n", flush=True)
 
 
