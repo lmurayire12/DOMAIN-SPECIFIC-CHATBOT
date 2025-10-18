@@ -5,10 +5,6 @@ import pickle
 from pathlib import Path
 from datetime import datetime
 
-# Set matplotlib backend before importing to prevent font cache hanging
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend
-
 import pandas as pd
 import numpy as np
 import tensorflow as tf
