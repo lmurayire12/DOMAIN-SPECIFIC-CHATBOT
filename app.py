@@ -20,10 +20,17 @@ import uvicorn
 
 
 DATA_URL = "https://raw.githubusercontent.com/lmurayire12/DOMAIN-SPECIFIC-CHATBOT/refs/heads/main/data/personal_transactions%20new.csv"
-MODEL_DIR = Path("./saved_models/fine_tuned_t5")
+MODEL_DIR = Path("./saved_models/fine_tuned_t5")  # Optional local fallback
 FAISS_INDEX_PATH = "./saved_models/transactions.faiss"
 FAISS_META_PATH = "./saved_models/faiss_meta.pkl"
-EMB_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+# Preferred Hugging Face model IDs (override via env)
+HF_T5_MODEL_ID = os.environ.get("T5_MODEL_ID") or os.environ.get("HF_T5_MODEL_ID") or "google/flan-t5-small"
+EMB_MODEL = os.environ.get("SENTENCE_EMB_MODEL_ID", "sentence-transformers/all-MiniLM-L6-v2")
+
+# Optional shared cache dir (HF Spaces sets HF_HOME)
+HF_CACHE_DIR = os.environ.get("HF_HOME") or os.environ.get("TRANSFORMERS_CACHE")
+
 MAX_LENGTH = 256
 
 
@@ -36,21 +43,38 @@ def generate_text(input_ids, attention_mask, model):
 
 
 def load_model():
-    model_path = Path(MODEL_DIR)
-    model_file = model_path / "tf_model.h5"
-    tokenizer_file = model_path / "tokenizer_config.json"
-    
-    # Check if both model weights and tokenizer exist
-    if not model_file.exists() or not tokenizer_file.exists():
-        print("⚠ Fine-tuned model not found. Using base FLAN-T5-small.", flush=True)
-        print("💡 To use the fine-tuned model, run chatbot.ipynb first.", flush=True)
-        tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
-        model = TFAutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small", from_pt=True)
+    """Load seq2seq model from Hugging Face Hub if possible, else local, else base."""
+    # 1) Try Hub (supports large/fine-tuned models)
+    try:
+        print(f"🔎 Loading model from Hugging Face: {HF_T5_MODEL_ID}", flush=True)
+        tokenizer = AutoTokenizer.from_pretrained(HF_T5_MODEL_ID, cache_dir=HF_CACHE_DIR)
+        # Many checkpoints store PyTorch weights; allow conversion to TF with from_pt=True
+        model = TFAutoModelForSeq2SeqLM.from_pretrained(HF_T5_MODEL_ID, from_pt=True, cache_dir=HF_CACHE_DIR)
+        print("✓ Loaded model from Hugging Face Hub", flush=True)
         return tokenizer, model
-    
-    print("✓ Loading fine-tuned model from local directory", flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR))
-    model = TFAutoModelForSeq2SeqLM.from_pretrained(str(MODEL_DIR))
+    except Exception as e:
+        print(f"⚠ Hub load failed: {e}", flush=True)
+
+    # 2) Try local fine-tuned directory (if present)
+    model_path = Path(MODEL_DIR)
+    if model_path.exists():
+        try:
+            print("🔎 Loading model from local directory", flush=True)
+            tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR))
+            try:
+                model = TFAutoModelForSeq2SeqLM.from_pretrained(str(MODEL_DIR))
+            except Exception:
+                # If only PyTorch weights present locally
+                model = TFAutoModelForSeq2SeqLM.from_pretrained(str(MODEL_DIR), from_pt=True)
+            print("✓ Loaded model from local directory", flush=True)
+            return tokenizer, model
+        except Exception as e:
+            print(f"⚠ Local load failed: {e}", flush=True)
+
+    # 3) Final fallback to a small public checkpoint
+    print("⚠ Falling back to base model: google/flan-t5-small", flush=True)
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small", cache_dir=HF_CACHE_DIR)
+    model = TFAutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small", from_pt=True, cache_dir=HF_CACHE_DIR)
     return tokenizer, model
 
 
