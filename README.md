@@ -1,4 +1,5 @@
 # BudgetBuddy - Personal Finance Chatbot 
+Chatbot link: https://huggingface.co/spaces/lmurayire/budgetbuddy
 
 **Domain-Specific Chatbot using Fine-Tuned FLAN-T5 + RAG**
 
